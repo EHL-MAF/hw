@@ -16,6 +16,8 @@
 #include "process.h"
 #include "shell.h"
 
+process* f_process= NULL;
+
 int cmd_quit(tok_t arg[]) {
   printf("Bye\n");
   exit(0);
@@ -31,10 +33,17 @@ typedef struct fun_desc {
   char *cmd;
   char *doc;
 } fun_desc_t;
+
+
 // add more commands to this lookup table!
 fun_desc_t cmd_table[] = {
   {cmd_help, "?", "show this help menu"},
   {cmd_quit, "quit", "quit the command shell"},
+  {cmd_cd , "cd" , "change directory"},
+  {cmd_wait , "wait" , "Waiting for process to finish"},
+  {cmd_fg , "fg" , "process in foreground"},
+  {cmd_bg , "bg" , "process in background"},
+  
 };
 
 int lookup(char cmd[]) {
@@ -79,7 +88,7 @@ void init_shell()
     tcgetattr(shell_terminal, &shell_tmodes);
   }
   
-  /** YOUR CODE HERE */
+  SET_SIGNALS(SIG_IGN);
   // ignore signals
 }
 
@@ -88,17 +97,95 @@ void init_shell()
  */
 void add_process(process* p)
 {
-  /** YOUR CODE HERE */
+  
+    if(f_process == NULL){
+        f_process =p;
+        p->next =p;
+        p->prev = p;
+  }
+   else{
+        f_process->prev->next=p;
+        p->prev= f_process->prev;
+        f_process->prev = p;
+        p->next = f_process; 
+     }
 }
 
 /**
  * Creates a process given the tokens parsed from stdin
  *
  */
-process* create_process(tok_t* tokens)
+process* create_process(char* inputString)
 {
-  /** YOUR CODE HERE */
-  return NULL;
+  int outfile = STDOUT_FILENO; 
+  
+  char *out_redirect = strstr( inputString, ">" );
+  if( out_redirect != NULL ){
+    
+    *out_redirect = NUL; 
+    char *output = out_redirect + 1; 
+    
+    char *file = getToks(output)[0];
+    outfile = open( file, O_WRONLY | O_CREAT, S_IRUSR | S_IWUSR | S_IROTH | S_IWOTH);
+   
+     if( outfile < 0 ) {
+       perror( file );
+       return NULL;
+     }
+  }
+
+  int infile = STDIN_FILENO; 
+ 
+  char *in_redirect = strstr(inputString, "<");
+  if( in_redirect != NULL ){
+    
+    *in_redirect = NUL; 
+    char *input = in_redirect + 1; 
+   
+    char *file = getToks(input)[0];
+    infile = open( file, O_RDONLY );
+    
+    if( infile < 0 ){
+      perror( file );
+      return NULL;
+    }
+  }
+
+
+  bool is_background = false;
+  char* bg = strchr(inputString, '&');
+  if( bg != NULL ){
+    is_background = true;
+    bg = NUL; 
+  }
+
+  
+  tok_t *t = getToks( inputString );  
+  int fundex = lookup(t[0]);
+  if (fundex >= 0) { 
+    
+    cmd_table[fundex].fun(&t[1]);
+    return NULL;
+  }
+  else { 
+    process* p = (process*) calloc( 1, sizeof(process) );
+    p->stdin = infile;
+    p->stdout = outfile;
+    p->stderr = STDERR_FILENO;
+    p->background = is_background;
+    p->next = p->prev = NULL;
+    
+    int argc = 0;
+    for( tok_t *tok = t; *tok != NUL; ++tok )
+      ++argc;
+    p->argc = argc;
+    p->argv = t;
+    
+    add_process( p );
+    return p;
+  }
+}
+  
 }
 
 
