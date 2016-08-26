@@ -13,7 +13,14 @@
  */
 void launch_process(process *p)
 {
-  /** YOUR CODE HERE */
+  SET_SIGNALS(SIG_DFL);
+  dup2( p->stdin ,STDIN_FILENO);
+  dup2( p->stdout ,STDOUT_FILENO );
+  exec ( p->argv[0] ,p->argv);
+  perror ("exec");
+  exit(EXIT_FAILURE);
+
+   
 }
 
 /**
@@ -24,8 +31,26 @@ void launch_process(process *p)
 void
 put_process_in_foreground (process *p, int cont)
 {
-  /** YOUR CODE HERE */
-}
+   if(tcsetpgrp(shell_terminal,p->pid) <0)
+    printf("Failed to set process group terminal" );
+    
+   if(resume) {
+      if( !p->completed ) 
+      p->stopped = false;
+     
+    if( kill (- p->pid, SIGCONT ) <0 )
+     perror( "kill (SIGCONT)");
+   }
+    wait_for_process( p );
+    
+     if(tcsetpgrp(shell_terminal, shell_pgid) < 0)
+    printf("Failed to set process group terminal\n" );
+     if(tcsettr(shell_terminal,&p->tmodes) <0)
+    printf("Failed to retrieve terminal attributes" );
+     if( tcsettr(shell_terminal,TCSADRAIN, &shell_tmodes) <0)
+    printf("Failed to set attributes" );
+    
+}  
 
 /**
  * Put a process in the background. If the cont argument is true, send
@@ -34,5 +59,12 @@ put_process_in_foreground (process *p, int cont)
 void
 put_process_in_background (process *p, int cont)
 {
-  /** YOUR CODE HERE */
+   if(resume) {
+      if( !p->completed ) 
+      p->stopped = false;
+     
+    if( kill (- p->pid, SIGCONT ) <0 )
+     perror( "kill (SIGCONT)");
+   }
+
 }
